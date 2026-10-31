@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
 import './store/auth' // starts session restore and background sync
 import { CommandPalette } from './components/CommandPalette'
 import { EqPanel } from './components/EqPanel'
@@ -101,6 +101,7 @@ export function App() {
       <section className="stage">
         <TopBar />
         <main className="main" ref={main}>
+          <MotionConfig reducedMotion="user">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={viewKey} className="page" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
               {view.name === 'home' && <Home />}
@@ -115,6 +116,7 @@ export function App() {
               {view.name === 'smart' && <SmartView id={view.id} key={view.id} />}
             </motion.div>
           </AnimatePresence>
+          </MotionConfig>
         </main>
       </section>
       {panel && <QueuePanel />}
