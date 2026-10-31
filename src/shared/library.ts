@@ -42,6 +42,8 @@ export interface LibraryBackend {
   search(q: string, limit: number): Promise<Track[]>
   all(limit: number): Promise<Track[]>
   getTrack(id: string): Promise<Track | null>
+  /** Desktop: locate a missing local file and reconnect it to its existing track entry. */
+  relinkTrack?(id: string): Promise<boolean>
   /** A URL an <audio> element can play. Web returns an object URL, desktop a vega-media:// URL. */
   streamUrl(id: string): Promise<string>
   /** Desktop only: routes an online stream URL through the main-process disk cache. */

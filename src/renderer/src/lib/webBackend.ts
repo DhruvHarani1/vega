@@ -49,6 +49,7 @@ interface TrackRec {
   trackNo?: number
   durationMs: number
   artKey?: string
+  available?: boolean
 }
 
 const DB_NAME = 'vega'
@@ -131,7 +132,8 @@ export function createWebBackend(): LibraryBackend {
     genres: t.genre ? [t.genre] : undefined,
     year: t.year,
     durationMs: t.durationMs,
-    artworkUrl: t.artKey ? artUrls.get(t.artKey) : undefined
+    artworkUrl: t.artKey ? artUrls.get(t.artKey) : undefined,
+    available: t.available !== false
   })
 
   async function info(r: FolderRec): Promise<FolderInfo> {
@@ -158,7 +160,7 @@ export function createWebBackend(): LibraryBackend {
         seen.add(key)
         const file = await handle.getFile()
         const prev = existing.get(key)
-        if (!prev || prev.size !== file.size || prev.mtime !== file.lastModified) todo.push({ parts, file })
+        if (!prev || prev.available === false || prev.size !== file.size || prev.mtime !== file.lastModified) todo.push({ parts, file })
         if (seen.size % 100 === 0) emit({ ...base, phase: 'walking', total: seen.size })
       }
       const goneIds = [...existing.entries()].filter(([k]) => !seen.has(k)).map(([, t]) => t.id)
@@ -195,7 +197,8 @@ export function createWebBackend(): LibraryBackend {
             year: c.year,
             trackNo: c.track.no ?? undefined,
             durationMs: Math.round((meta.format.duration ?? 0) * 1000),
-            artKey
+            artKey,
+            available: true
           })
         } catch {
           // unreadable or unsupported file: skip
@@ -205,7 +208,10 @@ export function createWebBackend(): LibraryBackend {
       }
 
       const tx = d.transaction(['tracks', 'art', 'folders'], 'readwrite')
-      for (const id of goneIds) tx.objectStore('tracks').delete(id)
+      for (const id of goneIds) {
+        const missing = existing.get([...existing.entries()].find(([, track]) => track.id === id)?.[0] ?? '')
+        if (missing) tx.objectStore('tracks').put({ ...missing, available: false })
+      }
       for (const t of out) tx.objectStore('tracks').put(t)
       for (const a of arts) tx.objectStore('art').put(a)
       r.lastScan = Date.now()

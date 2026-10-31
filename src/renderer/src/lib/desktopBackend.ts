@@ -24,6 +24,7 @@ export function createDesktopBackend(api: VegaDesktopApi): LibraryBackend {
     search: (q, limit) => api.library.search(q, limit),
     all: (limit) => api.library.all(limit),
     getTrack: (id) => api.library.getTrack(id),
+    relinkTrack: (id) => api.library.relinkTrack(id),
     streamUrl: async (id) => `vega-media://file/${encodeURIComponent(id)}`,
     proxyStream: (url) => (/^https:\/\//.test(url) ? toStreamUrl(url) : url),
     kvGetAll: () => api.kv.getAll(),

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { refKey, type Track } from '@shared/types'
 import { fmtTime } from '@/lib/format'
+import { backend } from '@/lib/backend'
+import { useCatalog } from '@/store/catalog'
 import { canSaveOffline, isSavedOffline, removeOffline, saveOffline } from '@/lib/offline'
 import { radioFrom } from '@/lib/recommender'
 import { warmOnHover } from '@/lib/sources'
@@ -30,6 +32,11 @@ export function TrackRow({ track, index, onPlay, extra }: Props) {
   const liked = useLibrary((s) => s.liked.some((x) => refKey(x.ref) === key))
   const toggleLike = useLibrary((s) => s.toggleLike)
   const [menu, setMenu] = useState(false)
+  const [available, setAvailable] = useState(track.available)
+  useEffect(() => {
+    if (track.ref.source !== 'local') return
+    void backend.getTrack(track.ref.id).then((current) => setAvailable(current?.available ?? false))
+  }, [track.ref.id, track.ref.source])
   const live = track.durationMs === 0
 
   return (
@@ -44,6 +51,7 @@ export function TrackRow({ track, index, onPlay, extra }: Props) {
       <div className="row-main">
         <div className="row-title">{track.title}</div>
         <div className="row-sub">
+          {available === false && <span className="err">File unavailable · </span>}
           {SOURCE_LABEL[track.ref.source] && <span className={`src src-${track.ref.source}`}>{SOURCE_LABEL[track.ref.source]}</span>}
           {track.artists.join(', ')}
         </div>
@@ -57,17 +65,18 @@ export function TrackRow({ track, index, onPlay, extra }: Props) {
         <button className="icon-btn" onClick={() => setMenu((m) => !m)} aria-label="More options">
           <Icon name="more" size={18} />
         </button>
-        {menu && <TrackMenu track={track} extra={extra} close={() => setMenu(false)} />}
+        {menu && <TrackMenu track={track} available={available} onRelink={() => setAvailable(true)} extra={extra} close={() => setMenu(false)} />}
       </div>
     </div>
   )
 }
 
-function TrackMenu({ track, extra, close }: { track: Track; extra?: Props['extra']; close: () => void }) {
+function TrackMenu({ track, available, onRelink, extra, close }: { track: Track; available?: boolean; onRelink: () => void; extra?: Props['extra']; close: () => void }) {
   const playlists = useLibrary((s) => s.playlists)
   const addToPlaylist = useLibrary((s) => s.addToPlaylist)
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const toast = useUi((s) => s.toast)
+  const refreshCatalog = useCatalog((s) => s.refresh)
   const { playNext, enqueue } = usePlayer.getState()
   const ref = useRef<HTMLDivElement>(null)
   const [saved, setSaved] = useState<boolean | null>(null)
@@ -108,6 +117,15 @@ function TrackMenu({ track, extra, close }: { track: Track; extra?: Props['extra
     <>
       <div className="menu-scrim" onClick={close} />
       <div className="menu" ref={ref}>
+        {track.ref.source === 'local' && available === false && backend.relinkTrack && item('Locate missing file…', 'folder', () => {
+          void backend.relinkTrack!(track.ref.id).then((relinked) => {
+            if (relinked) {
+              onRelink()
+              toast('File reconnected.', 'ok')
+              void refreshCatalog()
+            }
+          }).catch((error: Error) => toast(error.message, 'error'))
+        })}
         {item('Play next', 'play', () => {
           playNext(track)
           toast('Playing next', 'ok')

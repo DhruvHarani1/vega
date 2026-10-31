@@ -97,12 +97,12 @@ export async function scanFolder(
       }
       const mtime = Math.round(st.mtimeMs)
       const prev = known.get(path)
-      if (!prev || prev.size !== st.size || prev.mtime !== mtime) todo.push({ path, size: st.size, mtime })
+      if (!prev || prev.available === 0 || prev.size !== st.size || prev.mtime !== mtime) todo.push({ path, size: st.size, mtime })
       if (seen.size % 200 === 0) onProgress({ ...base, phase: 'walking', total: seen.size })
     }
 
     const gone = [...known.entries()].filter(([p]) => !seen.has(p)).map(([, v]) => v.id)
-    if (gone.length) db.transaction(() => db.deleteTracks(gone))
+    if (gone.length) db.transaction(() => db.markMissing(gone))
 
     let scanned = 0
     let added = 0
@@ -121,7 +121,7 @@ export async function scanFolder(
         try {
           const t = await readTags(f.path, artDir)
           batch.push({
-            id: trackIdFor(f.path),
+            id: known.get(f.path)?.id ?? trackIdFor(f.path),
             folder_id: folderId,
             path: f.path,
             size: f.size,

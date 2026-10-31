@@ -45,7 +45,8 @@ const MIGRATIONS: string[] = [
     INSERT INTO tracks_fts(rowid, title, artist, album, genre) VALUES (new.rowid, new.title, new.artist, new.album, new.genre);
   END;
   CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-  `
+  `,
+  `ALTER TABLE tracks ADD COLUMN available INTEGER NOT NULL DEFAULT 1;`
 ]
 
 export interface TrackRow {
@@ -62,9 +63,10 @@ export interface TrackRow {
   track_no: number | null
   duration_ms: number
   art: string | null
+  available: number
 }
 
-export type TrackInput = Omit<TrackRow, 'id'> & { id: string; folder_id: number }
+export type TrackInput = Omit<TrackRow, 'id' | 'available'> & { id: string; folder_id: number }
 
 export function rowToTrack(r: TrackRow): Track {
   return {
@@ -75,7 +77,8 @@ export function rowToTrack(r: TrackRow): Track {
     genres: r.genre ? [r.genre] : undefined,
     year: r.year ?? undefined,
     durationMs: r.duration_ms,
-    artworkUrl: r.art ? `vega-media://art/${r.art}` : undefined
+    artworkUrl: r.art ? `vega-media://art/${r.art}` : undefined,
+    available: r.available === 1
   }
 }
 
@@ -155,29 +158,34 @@ export class LibraryDb {
 
   // ---- tracks ----
   /** path -> {size, mtime} for change detection during incremental scans. */
-  knownFiles(folderId: number): Map<string, { id: string; size: number; mtime: number }> {
-    const rows = this.stmt('SELECT id, path, size, mtime FROM tracks WHERE folder_id = ?').all(folderId) as {
+  knownFiles(folderId: number): Map<string, { id: string; size: number; mtime: number; available: number }> {
+    const rows = this.stmt('SELECT id, path, size, mtime, available FROM tracks WHERE folder_id = ?').all(folderId) as {
       id: string
       path: string
       size: number
       mtime: number
+      available: number
     }[]
-    return new Map(rows.map((r) => [r.path, { id: r.id, size: r.size, mtime: r.mtime }]))
+    return new Map(rows.map((r) => [r.path, { id: r.id, size: r.size, mtime: r.mtime, available: r.available }]))
   }
 
   upsertTrack(t: TrackInput): void {
     this.stmt(
-      `INSERT INTO tracks(id, folder_id, path, size, mtime, title, artist, artists_json, album, genre, year, track_no, duration_ms, art, added_at)
-       VALUES (@id, @folder_id, @path, @size, @mtime, @title, @artist, @artists_json, @album, @genre, @year, @track_no, @duration_ms, @art, @added_at)
+      `INSERT INTO tracks(id, folder_id, path, size, mtime, title, artist, artists_json, album, genre, year, track_no, duration_ms, art, added_at, available)
+       VALUES (@id, @folder_id, @path, @size, @mtime, @title, @artist, @artists_json, @album, @genre, @year, @track_no, @duration_ms, @art, @added_at, 1)
        ON CONFLICT(id) DO UPDATE SET size=excluded.size, mtime=excluded.mtime, title=excluded.title, artist=excluded.artist,
          artists_json=excluded.artists_json, album=excluded.album, genre=excluded.genre, year=excluded.year,
-         track_no=excluded.track_no, duration_ms=excluded.duration_ms, art=excluded.art`
+         track_no=excluded.track_no, duration_ms=excluded.duration_ms, art=excluded.art, available=1`
     ).run({ ...t, added_at: Date.now() } as unknown as Record<string, never>)
   }
 
-  deleteTracks(ids: string[]): void {
-    const s = this.stmt('DELETE FROM tracks WHERE id = ?')
+  markMissing(ids: string[]): void {
+    const s = this.stmt('UPDATE tracks SET available = 0 WHERE id = ?')
     for (const id of ids) s.run(id)
+  }
+
+  relinkTrack(id: string, path: string, folderId: number): void {
+    this.stmt('UPDATE tracks SET path = ?, folder_id = ?, available = 1 WHERE id = ?').run(path, folderId, id)
   }
 
   getTrack(id: string): TrackRow | undefined {

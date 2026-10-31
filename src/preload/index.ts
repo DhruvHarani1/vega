@@ -14,6 +14,7 @@ const api: VegaDesktopApi = {
     search: (q, limit) => invoke(CH.search, q, limit),
     all: (limit) => invoke(CH.all, limit),
     getTrack: (id) => invoke(CH.getTrack, id),
+    relinkTrack: (id) => invoke(CH.relinkTrack, id),
     onScanProgress: (cb) => {
       const l = (_e: IpcRendererEvent, p: ScanProgress): void => cb(p)
       ipcRenderer.on(EV.scanProgress, l)

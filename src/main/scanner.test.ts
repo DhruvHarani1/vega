@@ -90,7 +90,7 @@ describe('scanFolder', () => {
     expect(db.search('"; DROP', 10)).toHaveLength(0)
   })
 
-  it('rescans incrementally and drops deleted files', async () => {
+  it('retains deleted files as unavailable library entries', async () => {
     await scan()
     events.length = 0
     await scan()
@@ -101,7 +101,27 @@ describe('scanFolder', () => {
     events.length = 0
     await scan()
     expect(events.at(-1)).toMatchObject({ phase: 'done', total: 1, added: 1, removed: 1 })
-    expect(db.all(100).map((t) => t.title).sort()).toEqual(['Beyoncé Halo', 'Brand New', 'Cafe Rain', 'Midnight Drive'])
+    const all = db.all(100)
+    expect(all.map((t) => t.title).sort()).toEqual(['Beyoncé Halo', 'Brand New', 'Cafe Rain', 'Midnight Drive', 'untagged song'])
+    expect(all.find((t) => t.title === 'untagged song')?.available).toBe(0)
+    expect(all.find((t) => t.title === 'Brand New')?.available).toBe(1)
+  })
+
+  it('relinks a moved file without changing its library identity', async () => {
+    await scan()
+    const original = db.all(100).find((t) => t.title === 'Midnight Drive')!
+    await unlink(join(dir, 'Album One', '01 Midnight Drive.wav'))
+    const recoveredDir = join(dir, 'Recovered')
+    await mkdir(recoveredDir)
+    const recoveredPath = join(recoveredDir, 'Midnight Drive.wav')
+    await writeFile(recoveredPath, wav(2, { INAM: 'Midnight Drive', IART: 'Nova Lumen', IPRD: 'Neon Harbor', IGNR: 'Synthwave' }))
+    const folder = db.addFolder(dir)
+    db.relinkTrack(original.id, recoveredPath, folder.id)
+    await scanFolder(db, folder.id, dir, join(dir, '.art'), (p) => events.push(p))
+    const restored = db.getTrack(original.id)
+    expect(restored?.path).toBe(recoveredPath)
+    expect(restored?.available).toBe(1)
+    expect(db.all(100).filter((t) => t.title === 'Midnight Drive')).toHaveLength(1)
   })
 
   it('removing a folder cascades to tracks and search index', async () => {

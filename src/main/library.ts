@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol } from 'electron'
-import { join, resolve, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { APP_SCHEME, CH, EV, MEDIA_SCHEME } from '@shared/ipc'
 import type { ScanProgress } from '@shared/library'
@@ -108,6 +108,23 @@ export function initLibrary(): void {
   ipcMain.handle(CH.getTrack, (_e, id: string) => {
     const r = db.getTrack(String(id))
     return r ? rowToTrack(r) : null
+  })
+
+  ipcMain.handle(CH.relinkTrack, async (e, id: string) => {
+    const current = db.getTrack(String(id))
+    if (!current) return false
+    const win = BrowserWindow.fromWebContents(e.sender) ?? undefined
+    const result = await dialog.showOpenDialog(win!, {
+      title: `Locate ${current.title}`,
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['mp3', 'flac', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'weba'] }]
+    })
+    const path = result.filePaths[0]
+    if (result.canceled || !path) return false
+    const folder = db.addFolder(dirname(path))
+    db.relinkTrack(String(id), path, folder.id)
+    await runScan(folder.id)
+    return true
   })
   // yt-dlp ships inside the app (resources/bin); a copy updated from Sources lives in userData and wins
   const resources = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')

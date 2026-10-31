@@ -16,6 +16,8 @@ export interface Track {
   mbid?: string
   /** Remote artwork. Absent => the UI draws a generated cover from the track key. */
   artworkUrl?: string
+  /** False when a local library file is no longer present at its indexed path. */
+  available?: boolean
 }
 
 export const refKey = (r: TrackRef): string => `${r.source}:${r.id}`

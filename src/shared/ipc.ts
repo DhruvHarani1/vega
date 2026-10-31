@@ -10,6 +10,7 @@ export const CH = {
   search: 'library:search',
   all: 'library:all',
   getTrack: 'library:getTrack',
+  relinkTrack: 'library:relinkTrack',
   kvGetAll: 'kv:getAll',
   kvSet: 'kv:set',
   cacheStats: 'cache:stats',
@@ -38,6 +39,7 @@ export interface VegaDesktopApi {
     search(q: string, limit: number): Promise<Track[]>
     all(limit: number): Promise<Track[]>
     getTrack(id: string): Promise<Track | null>
+    relinkTrack(id: string): Promise<boolean>
     onScanProgress(cb: (p: ScanProgress) => void): () => void
   }
   cache: {
