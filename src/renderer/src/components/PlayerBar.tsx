@@ -24,6 +24,9 @@ export function PlayerBar() {
 
   return (
     <footer className={`dock${track ? ' has-track' : ''}`}>
+      <div className="sr-only" role="status" aria-live="polite">
+        {track ? `Now playing: ${track.title} by ${track.artists.join(', ')}` : ''}
+      </div>
       <div className="dock-left">
         {track ? (
           <>
@@ -58,7 +61,7 @@ export function PlayerBar() {
 
       <div className="dock-center">
         <div className="transport">
-          <button className={`icon-btn${p.shuffle ? ' on' : ''}`} onClick={p.toggleShuffle} aria-label="Shuffle" title="Shuffle">
+          <button className={`icon-btn${p.shuffle ? ' on' : ''}`} onClick={p.toggleShuffle} aria-label="Shuffle" aria-pressed={p.shuffle} title="Shuffle">
             <Icon name="shuffle" size={18} />
           </button>
           <button className="icon-btn" onClick={p.prev} aria-label="Previous" disabled={!track}>
@@ -70,7 +73,7 @@ export function PlayerBar() {
           <button className="icon-btn" onClick={() => p.next()} aria-label="Next" disabled={!track}>
             <Icon name="next" size={22} />
           </button>
-          <button className={`icon-btn${p.repeat !== 'off' ? ' on' : ''}`} onClick={p.cycleRepeat} aria-label={`Repeat ${p.repeat}`} title="Repeat">
+          <button className={`icon-btn${p.repeat !== 'off' ? ' on' : ''}`} onClick={p.cycleRepeat} aria-label={`Repeat ${p.repeat}`} aria-pressed={p.repeat !== 'off'} title="Repeat">
             <Icon name={p.repeat === 'one' ? 'repeat-one' : 'repeat'} size={18} />
           </button>
         </div>
@@ -91,6 +94,7 @@ export function PlayerBar() {
               style={{ ['--pct' as string]: `${pct}%` }}
               onChange={(e) => p.seek(Number(e.target.value))}
               aria-label="Seek"
+              aria-valuetext={`${fmtTime(p.positionMs)} of ${fmtTime(p.durationMs)}`}
             />
           )}
           <span className="time">{live ? '' : fmtTime(p.durationMs)}</span>
@@ -98,17 +102,17 @@ export function PlayerBar() {
       </div>
 
       <div className="dock-right">
-        <button className={`icon-btn${panel === 'lyrics' ? ' on' : ''}`} onClick={() => togglePanel('lyrics')} aria-label="Lyrics" title="Lyrics (L)" disabled={!track}>
+        <button className={`icon-btn${panel === 'lyrics' ? ' on' : ''}`} onClick={() => togglePanel('lyrics')} aria-label="Lyrics" aria-pressed={panel === 'lyrics'} title="Lyrics (L)" disabled={!track}>
           <Icon name="lyrics" size={19} />
         </button>
-        <button className={`icon-btn${panel === 'queue' ? ' on' : ''}`} onClick={() => togglePanel('queue')} aria-label="Queue" title="Queue">
+        <button className={`icon-btn${panel === 'queue' ? ' on' : ''}`} onClick={() => togglePanel('queue')} aria-label="Queue" aria-pressed={panel === 'queue'} title="Queue">
           <Icon name="queue" size={19} />
         </button>
         <button className="icon-btn" onClick={openNowPlaying} aria-label="Fullscreen player" title="Fullscreen player" disabled={!track}>
           <Icon name="expand" size={19} />
         </button>
         {window.vega && (
-          <button className={`icon-btn${eqOpen ? ' on' : ''}`} onClick={() => setEqOpen(!eqOpen)} aria-label="Equalizer" title="Equalizer">
+          <button className={`icon-btn${eqOpen ? ' on' : ''}`} onClick={() => setEqOpen(!eqOpen)} aria-label="Equalizer" aria-pressed={eqOpen} title="Equalizer">
             <Icon name="eq" size={19} />
           </button>
         )}
