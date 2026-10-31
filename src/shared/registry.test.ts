@@ -61,6 +61,57 @@ describe('SourceRegistry', () => {
     expect(calls).toBe(4)
   })
 
+  it('reports provider failures separately without hiding successful results or leaking error details', async () => {
+    const r = new SourceRegistry()
+    r.register(provider('jamendo', {
+      name: 'Jamendo',
+      search: async () => { throw new Error('Jamendo 503 client_id=private-secret') }
+    }), 1)
+    r.register(provider('audius', {
+      name: 'Audius',
+      search: async () => ({ tracks: [track('audius', '2', 'Available')] })
+    }), 2)
+
+    const outcome = await r.searchDetailed('x')
+    expect(outcome.tracks.map((t) => t.title)).toEqual(['Available'])
+    expect(outcome.failures).toEqual([{
+      providerId: 'jamendo',
+      providerName: 'Jamendo',
+      message: 'Source temporarily unavailable (HTTP 503). Try again.',
+      retryable: true
+    }])
+    expect(JSON.stringify(outcome)).not.toContain('private-secret')
+  })
+
+  it('allows an explicit retry to reset a tripped circuit breaker', async () => {
+    let now = 0
+    let calls = 0
+    const r = new SourceRegistry({}, () => now)
+    r.register(provider('flaky', {
+      search: async () => {
+        calls++
+        if (calls <= 3) throw new Error('network unavailable')
+        return { tracks: [track('flaky', '1')] }
+      }
+    }))
+    for (let i = 0; i < 3; i++) await r.searchDetailed('x')
+    expect(calls).toBe(3)
+    const paused = await r.searchDetailed('x')
+    expect(paused.failures[0]?.retryable).toBe(true)
+    const retried = await r.searchDetailed('x', { retry: true })
+    expect(calls).toBe(4)
+    expect(retried.failures).toHaveLength(0)
+    expect(retried.tracks).toHaveLength(1)
+  })
+
+  it('identifies playback failures without exposing provider error details', async () => {
+    const r = new SourceRegistry()
+    r.register(provider('audius', {
+      name: 'Audius',
+      resolve: async () => { throw new Error('request failed token=private-secret') }
+    }))
+    await expect(r.resolve(track('audius', '1'))).rejects.toThrow('Unable to play from Audius.')
+  })
   it('falls back to an alternate source when resolve fails', async () => {
     const r = new SourceRegistry()
     r.register(

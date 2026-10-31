@@ -37,6 +37,11 @@ export function PlayerBar() {
               <div className="row-title">{track.title}</div>
               <div className={`row-sub${p.error ? ' err' : ''}`}>{p.error ?? (p.loading ? 'Loading…' : track.artists.join(', '))}</div>
             </div>
+            {p.error && (
+              <button className="icon-btn" onClick={p.retryCurrent} aria-label="Retry playback" title="Retry playback">
+                <Icon name="refresh-cw" size={17} />
+              </button>
+            )}
             <button className={`icon-btn like${liked ? ' on' : ''}`} onClick={() => toggleLike(track)} aria-label={liked ? 'Remove from liked' : 'Add to liked'}>
               <Icon name={liked ? 'heart-fill' : 'heart'} size={19} />
             </button>

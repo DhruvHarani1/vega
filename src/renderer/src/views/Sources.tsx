@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FolderInfo, ScanProgress } from '@shared/library'
+import type { Health } from '@shared/provider'
 import { backend } from '@/lib/backend'
+import { sources } from '@/lib/sources'
 import { useCatalog } from '@/store/catalog'
 import { useMeta } from '@/store/meta'
 import { useOnline } from '@/store/online'
@@ -13,6 +15,41 @@ function ago(ts: number | null): string {
 
 function fmtBytes(n: number): string {
   return n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : n < 1024 ** 3 ? `${(n / 1024 / 1024).toFixed(0)} MB` : `${(n / 1024 ** 3).toFixed(2)} GB`
+}
+
+function SourceHealthPanel() {
+  const [health, setHealth] = useState<Record<string, Health>>({})
+  const [checking, setChecking] = useState(false)
+  const check = useCallback(async () => {
+    setChecking(true)
+    setHealth(await sources.health())
+    setChecking(false)
+  }, [])
+  useEffect(() => { void check() }, [check])
+  return (
+    <>
+      <div className="shelf-head">
+        <h2 className="section">Source status</h2>
+        <button className="pill ghost" disabled={checking} onClick={() => void check()}>
+          {checking ? 'Checking…' : 'Check again'}
+        </button>
+      </div>
+      <div className="panel">
+        {sources.list().map((source) => {
+          const status = health[source.id]
+          return (
+            <div className="toggle-row" key={source.id}>
+              <div className="row-title">{source.name}</div>
+              <span className={status === 'ok' ? 'ok' : status === 'down' ? 'err' : 'muted'}>
+                {status === 'ok' ? 'Available' : status === 'degraded' ? 'Degraded' : status === 'down' ? 'Unavailable' : 'Checking…'}
+              </span>
+            </div>
+          )
+        })}
+        {!sources.list().length && <div className="row-sub">No sources are enabled.</div>}
+      </div>
+    </>
+  )
 }
 
 function YoutubePanel() {
@@ -186,6 +223,7 @@ export function Sources() {
         <div className="banner">
           This browser cannot open local folders. Use Chrome, Edge or the Vega desktop app to add your own music. Online sources work everywhere.
         </div>
+        <SourceHealthPanel />
         {onlineSection}
       </div>
     )
@@ -267,6 +305,7 @@ export function Sources() {
         })}
       </div>
 
+      <SourceHealthPanel />
       {onlineSection}
       <h2 className="section">Smarter recommendations</h2>
       <div className="panel toggle-row">

@@ -26,6 +26,7 @@ interface PlayerState {
   current: () => Track | null
   playTracks: (tracks: Track[], startIndex?: number) => void
   playIndex: (i: number) => void
+  retryCurrent: () => void
   togglePlay: () => void
   next: (auto?: boolean) => void
   prev: () => void
@@ -129,7 +130,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     } catch (err) {
       if (token !== loadToken) return
       console.warn('playback failed', err)
-      set({ loading: false, playing: false, error: `Can't play "${track.title}"` })
+      set({ loading: false, playing: false, error: err instanceof Error ? err.message : `Couldn't play "${track.title}". Check the connection and retry.` })
       // skip forward after a failure so a dead track doesn't stall the queue
       if (get().queue.length > 1) setTimeout(() => token === loadToken && get().next(true), 1200)
     }
@@ -172,7 +173,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const track = get().queue[get().index]
       if (!track) return
       const token = loadToken
-      set({ loading: false, playing: false, error: `Can't play "${track.title}"` })
+      set({ loading: false, playing: false, error: `Couldn't play "${track.title}" from YouTube Music. Retry playback or choose another source.` })
       if (get().queue.length > 1) setTimeout(() => token === loadToken && get().next(true), 1200)
     }
   })
@@ -189,7 +190,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const track = get().queue[get().index]
     if (!track || !audio.src) return
     const token = loadToken
-    set({ loading: false, playing: false, error: `Can't play "${track.title}"` })
+    set({ loading: false, playing: false, error: `Couldn't play "${track.title}". The stream may have expired or the source is offline. Retry playback.` })
     if (get().queue.length > 1) setTimeout(() => token === loadToken && get().next(true), 1200)
   })
   audio.addEventListener('ended', () => {
@@ -231,6 +232,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (i < 0 || i >= get().queue.length) return
       finishSession(true)
       set({ index: i })
+      void startCurrent()
+    },
+
+    retryCurrent: () => {
+      if (get().index < 0) return
+      finishSession(true)
       void startCurrent()
     },
 

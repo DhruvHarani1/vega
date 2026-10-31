@@ -14,7 +14,7 @@ import { backend } from './backend'
  * Online providers (M3) register here too.
  */
 export const sources = new SourceRegistry({
-  onProviderError: (id, err) => console.warn(`[source:${id}]`, err)
+  onProviderError: (id) => console.warn(`[source:${id}] request failed`)
 })
 
 sources.register(createLocalProvider(backend), 10)

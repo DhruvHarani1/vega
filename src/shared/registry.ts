@@ -15,7 +15,7 @@ const norm = (s: string): string =>
 export function dedupeKey(t: Track): string {
   if (t.isrc) return `isrc:${t.isrc.toUpperCase()}`
   if (t.mbid) return `mbid:${t.mbid}`
-  const bucket = Math.round(t.durationMs / 4000) // coarse +-2 s tolerance
+  const bucket = Math.round(t.durationMs / 4000)
   return `t:${norm(t.artists[0] ?? '')}|${norm(t.title)}|${bucket}`
 }
 
@@ -26,8 +26,34 @@ interface Slot {
   downUntil: number
 }
 
+export interface ProviderSearchFailure {
+  providerId: string
+  providerName: string
+  message: string
+  retryable: boolean
+}
+
+export interface SearchOutcome {
+  tracks: Track[]
+  failures: ProviderSearchFailure[]
+}
+
 export interface RegistryEvents {
   onProviderError?(id: string, err: unknown): void
+}
+
+function describeFailure(err: unknown): { message: string; retryable: boolean } {
+  const raw = err instanceof Error ? err.message : ''
+  const status = raw.match(/\b(?:Audius|Jamendo|Internet Archive)\s+(\d{3})\b/i)?.[1]
+  const code = status ? Number(status) : 0
+  if (code === 408 || code === 425 || code === 429 || code >= 500) {
+    return { message: `Source temporarily unavailable (HTTP ${code}). Try again.`, retryable: true }
+  }
+  if (code >= 400) {
+    return { message: `Source rejected the request (HTTP ${code}). Check its configuration.`, retryable: false }
+  }
+  if (/timeout/i.test(raw)) return { message: 'Source timed out. Retry the search.', retryable: true }
+  return { message: 'Could not reach this source. Check your connection and retry.', retryable: true }
 }
 
 /** Fan-out search, dedupe, circuit breaking and resolve fallback across providers. */
@@ -62,6 +88,7 @@ export class SourceRegistry {
 
   private ok(s: Slot): void {
     s.fails = 0
+    s.downUntil = 0
   }
 
   private fail(s: Slot, err: unknown): void {
@@ -85,10 +112,65 @@ export class SourceRegistry {
   }
 
   /**
-   * Query every searchable provider in parallel. `onPartial` fires as each answers (so the UI can show local
-   * results first); the returned promise resolves with the merged, deduped list in provider-priority order.
-   * A slow or failing provider never blocks the others.
+   * Search every enabled provider independently. Failures are returned separately from empty results,
+   * while successful providers continue contributing tracks. A retry resets circuit breakers.
    */
+  async searchDetailed(
+    q: string,
+    opts: {
+      kind?: SearchKind
+      limit?: number
+      timeoutMs?: number
+      signal?: AbortSignal
+      onPartial?: (tracks: Track[]) => void
+      retry?: boolean
+    } = {}
+  ): Promise<SearchOutcome> {
+    const { kind = 'track', limit = 25, timeoutMs = 4000, signal, onPartial, retry = false } = opts
+    const slots = [...this.slots.values()]
+      .filter((s) => s.provider.capabilities.search)
+      .sort((a, b) => a.priority - b.priority)
+    if (retry) for (const s of slots) this.ok(s)
+
+    const results: Track[][] = slots.map(() => [])
+    const failures: ProviderSearchFailure[] = []
+    const arrived = new Map<string, Track>()
+
+    await Promise.all(
+      slots.map(async (s, i) => {
+        if (signal?.aborted) return
+        if (s.downUntil > this.now()) {
+          failures.push({
+            providerId: s.provider.id,
+            providerName: s.provider.name,
+            message: 'Source temporarily paused after repeated failures. Retry to try again.',
+            retryable: true
+          })
+          return
+        }
+        try {
+          const r = await withTimeout(s.provider.search(q, { kind, limit, signal }), timeoutMs)
+          if (signal?.aborted) return
+          this.ok(s)
+          results[i] = r.tracks
+          if (onPartial) {
+            for (const t of r.tracks) if (!arrived.has(dedupeKey(t))) arrived.set(dedupeKey(t), t)
+            onPartial([...arrived.values()])
+          }
+        } catch (err) {
+          if (signal?.aborted) return
+          this.fail(s, err)
+          failures.push({ providerId: s.provider.id, providerName: s.provider.name, ...describeFailure(err) })
+        }
+      })
+    )
+
+    const merged = new Map<string, Track>()
+    for (const list of results) for (const t of list) if (!merged.has(dedupeKey(t))) merged.set(dedupeKey(t), t)
+    return { tracks: [...merged.values()], failures }
+  }
+
+  /** Backwards-compatible search API for callers that only need tracks. */
   async search(
     q: string,
     opts: {
@@ -99,30 +181,7 @@ export class SourceRegistry {
       onPartial?: (tracks: Track[]) => void
     } = {}
   ): Promise<Track[]> {
-    const { kind = 'track', limit = 25, timeoutMs = 4000, signal, onPartial } = opts
-    const slots = this.available().filter((s) => s.provider.capabilities.search)
-    const results: Track[][] = slots.map(() => [])
-    const arrived = new Map<string, Track>()
-
-    await Promise.all(
-      slots.map(async (s, i) => {
-        try {
-          const r = await withTimeout(s.provider.search(q, { kind, limit, signal }), timeoutMs)
-          this.ok(s)
-          results[i] = r.tracks
-          if (onPartial && !signal?.aborted) {
-            for (const t of r.tracks) if (!arrived.has(dedupeKey(t))) arrived.set(dedupeKey(t), t)
-            onPartial([...arrived.values()])
-          }
-        } catch (err) {
-          if (!signal?.aborted) this.fail(s, err)
-        }
-      })
-    )
-
-    const merged = new Map<string, Track>()
-    for (const list of results) for (const t of list) if (!merged.has(dedupeKey(t))) merged.set(dedupeKey(t), t)
-    return [...merged.values()]
+    return (await this.searchDetailed(q, opts)).tracks
   }
 
   async browse(): Promise<Shelf[]> {
@@ -145,10 +204,10 @@ export class SourceRegistry {
     if (slot && slot.downUntil <= this.now()) slot.provider.warm?.(track.ref.id)
   }
 
-  /** Resolve a track; if its own source fails, try other sources offering the same song (`alternates`). */
+  /** Resolve a track; if its own source fails, try other sources offering the same song (alternates). */
   async resolve(track: Track, alternates: Track[] = []): Promise<{ stream: StreamSource; ref: TrackRef }> {
     const same = alternates.filter((a) => dedupeKey(a) === dedupeKey(track) && a.ref.source !== track.ref.source)
-    let lastErr: unknown = new Error('no provider available')
+    const failed: string[] = []
     for (const c of [track, ...same]) {
       const slot = this.slots.get(c.ref.source)
       if (!slot || slot.downUntil > this.now()) continue
@@ -157,11 +216,12 @@ export class SourceRegistry {
         this.ok(slot)
         return { stream, ref: c.ref }
       } catch (err) {
-        lastErr = err
+        failed.push(slot.provider.name)
         this.fail(slot, err)
       }
     }
-    throw lastErr
+    if (failed.length) throw new Error(`Unable to play from ${failed.join(', ')}. Try again or choose another result.`)
+    throw new Error('No available source could play this track. Try again or choose another result.')
   }
 }
 
