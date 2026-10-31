@@ -8,6 +8,7 @@ import { startKeepAlive, stopKeepAlive } from '@/lib/keepAlive'
 import { offlineUrl } from '@/lib/offline'
 import { pingPlay } from '@/lib/trending'
 import { ytEmbed } from '@/lib/ytEmbed'
+import { EmbedBackgroundResume } from '@/lib/embedBackgroundResume'
 import { useLibrary } from './library'
 
 export type Repeat = 'off' | 'all' | 'one'
@@ -16,6 +17,7 @@ interface PlayerState {
   queue: Track[]
   index: number
   playing: boolean
+  resumeRequired: boolean
   loading: boolean
   error: string | null
   positionMs: number
@@ -79,6 +81,7 @@ export const getPosition = (): number => curTime() * 1000
 
 /** True while the current track plays in YouTube's embedded player (web) instead of the audio element. */
 let embedActive = false
+const embedBackgroundResume = new EmbedBackgroundResume()
 const curTime = (): number => (embedActive ? ytEmbed.time() : audio.currentTime)
 const setTime = (sec: number): void => {
   if (embedActive) ytEmbed.seek(sec)
@@ -87,6 +90,8 @@ const setTime = (sec: number): void => {
 
 export const usePlayer = create<PlayerState>((set, get) => {
   const startCurrent = async (): Promise<void> => {
+    embedBackgroundResume.reset()
+    set({ resumeRequired: false })
     const track = get().queue[get().index]
     if (!track) return
     const token = ++loadToken
@@ -150,19 +155,27 @@ export const usePlayer = create<PlayerState>((set, get) => {
   audio.addEventListener('timeupdate', () => {
     if (!embedActive) tick()
   })
+  document.addEventListener('visibilitychange', () => {
+    if (!embedActive) return
+    const shouldPrompt = embedBackgroundResume.visibilityChanged(document.hidden, wantPlay)
+    if (shouldPrompt) {
+      if (session) session.lastTick = null
+      set({ playing: false, resumeRequired: true })
+    }
+  })
   ytEmbed.setHandlers({
     state: (s) => {
       if (!embedActive) return
-      if (s === 'playing') set({ playing: true, loading: false })
-      else if (s === 'paused') {
-        // the browser pauses embeds when the tab is hidden (screen off, app switch): resume unless the user paused
-        if (document.hidden && wantPlay) {
-          ytEmbed.play()
-          return
-        }
+      if (s === 'playing') {
+        embedBackgroundResume.stateChanged(s, wantPlay)
+        set({ playing: true, loading: false, resumeRequired: false })
+      } else if (s === 'paused') {
+        const shouldPrompt = embedBackgroundResume.stateChanged(s, wantPlay)
         if (session) session.lastTick = null
-        set({ playing: false })
+        set({ playing: false, resumeRequired: shouldPrompt })
       } else if (s === 'ended') {
+        embedBackgroundResume.reset()
+        set({ resumeRequired: false })
         finishSession(false)
         get().next(true)
       }
@@ -203,6 +216,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     queue: [],
     index: -1,
     playing: false,
+    resumeRequired: false,
     loading: false,
     error: null,
     positionMs: 0,
@@ -238,9 +252,13 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (embedActive && get().index >= 0) {
         wantPlay = !get().playing
         if (get().playing) {
+          embedBackgroundResume.reset()
+          set({ resumeRequired: false })
           ytEmbed.pause()
           stopKeepAlive()
         } else {
+          embedBackgroundResume.resume()
+          set({ resumeRequired: false })
           ytEmbed.play()
           startKeepAlive()
         }
@@ -266,6 +284,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
         audio.pause()
         if (embedActive) {
           wantPlay = false
+          embedBackgroundResume.reset()
+          set({ resumeRequired: false })
           stopKeepAlive()
           ytEmbed.pause()
           ytEmbed.seek(0)

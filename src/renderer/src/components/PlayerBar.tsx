@@ -35,7 +35,7 @@ export function PlayerBar() {
             </button>
             <div className="dock-meta">
               <div className="row-title">{track.title}</div>
-              <div className={`row-sub${p.error ? ' err' : ''}`}>{p.error ?? (p.loading ? 'Loading…' : track.artists.join(', '))}</div>
+              <div className={`row-sub${p.error ? ' err' : ''}`} aria-live="polite">{p.error ?? (p.resumeRequired ? 'Playback paused - tap Play to resume' : p.loading ? 'Loading…' : track.artists.join(', '))}</div>
             </div>
             <button className={`icon-btn like${liked ? ' on' : ''}`} onClick={() => toggleLike(track)} aria-label={liked ? 'Remove from liked' : 'Add to liked'}>
               <Icon name={liked ? 'heart-fill' : 'heart'} size={19} />
