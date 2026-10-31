@@ -33,10 +33,7 @@ export function TrackRow({ track, index, onPlay, extra }: Props) {
   const toggleLike = useLibrary((s) => s.toggleLike)
   const [menu, setMenu] = useState(false)
   const [available, setAvailable] = useState(track.available)
-  useEffect(() => {
-    if (track.ref.source !== 'local') return
-    void backend.getTrack(track.ref.id).then((current) => setAvailable(current?.available ?? false))
-  }, [track.ref.id, track.ref.source])
+  useEffect(() => setAvailable(track.available), [track.available])
   const live = track.durationMs === 0
 
   return (
@@ -124,7 +121,7 @@ function TrackMenu({ track, available, onRelink, extra, close }: { track: Track;
               toast('File reconnected.', 'ok')
               void refreshCatalog()
             }
-          }).catch((error: Error) => toast(error.message, 'error'))
+          }).catch((error: Error) => toast(error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'error'))
         })}
         {item('Play next', 'play', () => {
           playNext(track)
