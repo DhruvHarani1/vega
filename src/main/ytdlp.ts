@@ -6,8 +6,9 @@ import { join } from 'node:path'
 
 /**
  * Optional YouTube source through the user's own copy of yt-dlp (https://github.com/yt-dlp/yt-dlp).
- * Vega never bundles it: the user installs it from Sources (downloaded from the official GitHub release and verified
- * against the release's SHA2-256SUMS). Arguments are always passed as an array (no shell), after `--`.
+ * The installer ships a copy (fetched by scripts/fetch-ytdlp.mjs into resources/bin); a copy the user installs or updates
+ * from Sources (downloaded from the official GitHub release, verified against its SHA2-256SUMS) lives in userData and wins.
+ * Arguments are always passed as an array (no shell), after `--`.
  */
 
 export interface RunResult {

@@ -45,6 +45,8 @@ Shortcuts: Space play/pause, Ctrl+Left/Right previous/next.
 
 ## Layout
 
+How it all fits together (desktop, web + Vercel functions, Android shell, Lyra, providers, sync): [docs/architecture.md](docs/architecture.md). Contributing and per-target setup: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```
 src/shared/      Track/Provider/Library contracts, SourceRegistry (fan-out, dedupe, circuit breaker), recs, stats
 src/providers/   mock, local, audius, jamendo, archive, metadata (MusicBrainz, Last.fm)
