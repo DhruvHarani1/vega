@@ -1,10 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol } from 'electron'
-import { dirname, join, resolve, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { APP_SCHEME, CH, EV, MEDIA_SCHEME } from '@shared/ipc'
 import type { ScanProgress } from '@shared/library'
 import { LibraryDb, rowToTrack } from './db'
 import { scanFolder } from './scanner'
+import { ownerFolder, relinkError } from './relink'
 import { proxyStream } from './streamProxy'
 import { YtDlp, assetName } from './ytdlp'
 import { YtMusic } from './ytmusic'
@@ -121,9 +122,15 @@ export function initLibrary(): void {
     })
     const path = result.filePaths[0]
     if (result.canceled || !path) return false
-    const folder = db.addFolder(dirname(path))
-    db.relinkTrack(String(id), path, folder.id)
-    await runScan(folder.id)
+    // Only relink inside a folder the user already added: never register (and scan) a new directory as a side effect.
+    const owner = ownerFolder(path, db.folders(), process.platform)
+    if (!owner) throw new Error('Pick a file inside one of your library folders, or add its folder under Sources first.')
+    try {
+      db.relinkTrack(String(id), path, Number(owner.id))
+    } catch (err) {
+      throw relinkError(err)
+    }
+    await runScan(Number(owner.id))
     return true
   })
   // yt-dlp ships inside the app (resources/bin); a copy updated from Sources lives in userData and wins

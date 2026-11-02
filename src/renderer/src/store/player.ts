@@ -135,7 +135,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     } catch (err) {
       if (token !== loadToken) return
       console.warn('playback failed', err)
-      set({ loading: false, playing: false, error: err instanceof Error ? err.message : `Couldn't play "${track.title}". Check the connection and retry.` })
+      if (embedActive) stopKeepAlive()
+      set({ loading: false, playing: false, error: `Couldn't play "${track.title}". Check the connection and retry.` }) // detail stays in the console
       // skip forward after a failure so a dead track doesn't stall the queue
       if (get().queue.length > 1) setTimeout(() => token === loadToken && get().next(true), 1200)
     }
@@ -161,6 +162,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const shouldPrompt = embedBackgroundResume.visibilityChanged(document.hidden, wantPlay)
     if (shouldPrompt) {
       if (session) session.lastTick = null
+      stopKeepAlive()
       set({ playing: false, resumeRequired: true })
     }
   })
@@ -169,10 +171,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (!embedActive) return
       if (s === 'playing') {
         embedBackgroundResume.stateChanged(s, wantPlay)
+        startKeepAlive() // idempotent: restores background protection after resuming from YouTube's own controls
         set({ playing: true, loading: false, resumeRequired: false })
       } else if (s === 'paused') {
         const shouldPrompt = embedBackgroundResume.stateChanged(s, wantPlay)
         if (session) session.lastTick = null
+        if (shouldPrompt) stopKeepAlive()
         set({ playing: false, resumeRequired: shouldPrompt })
       } else if (s === 'ended') {
         embedBackgroundResume.reset()
