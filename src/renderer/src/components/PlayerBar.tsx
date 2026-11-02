@@ -24,10 +24,10 @@ export function PlayerBar() {
 
   return (
     <footer className={`dock${track ? ' has-track' : ''}`}>
-      <div className="sr-only" role="status" aria-live="polite">
-        {track ? `Now playing: ${track.title} by ${track.artists.join(', ')}` : ''}
-      </div>
       <div className="dock-left">
+        <div className="sr-only" role="status" aria-live="polite">
+          {track ? `Now playing: ${track.title} by ${track.artists.join(', ')}` : ''}
+        </div>
         {track ? (
           <>
             <button className="dock-art" onClick={() => togglePanel('lyrics')} aria-label="Show lyrics" title="Show lyrics">
@@ -73,7 +73,8 @@ export function PlayerBar() {
           <button className="icon-btn" onClick={() => p.next()} aria-label="Next" disabled={!track}>
             <Icon name="next" size={22} />
           </button>
-          <button className={`icon-btn${p.repeat !== 'off' ? ' on' : ''}`} onClick={p.cycleRepeat} aria-label={`Repeat ${p.repeat}`} aria-pressed={p.repeat !== 'off'} title="Repeat">
+          <button className={`icon-btn${p.repeat !== 'off' ? ' on' : ''}`} onClick={p.cycleRepeat} aria-label="Repeat" aria-describedby="repeat-mode" aria-pressed={p.repeat !== 'off'} title={`Repeat: ${p.repeat}`}>
+            <span id="repeat-mode" className="sr-only">{p.repeat === 'one' ? 'Repeating this track' : p.repeat === 'all' ? 'Repeating the queue' : 'Repeat off'}</span>
             <Icon name={p.repeat === 'one' ? 'repeat-one' : 'repeat'} size={18} />
           </button>
         </div>
