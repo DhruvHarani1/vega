@@ -151,7 +151,9 @@ export function matchImportedTracks(entries: ImportedEntry[], available: Track[]
     }
     if (!track) {
       const key = `${normalize(entry.title)}|${normalize(entry.artists.join(' '))}`
-      track = byMetadata.get(key) ?? [...byMetadata.values()].find((candidate) => normalize(candidate.title) === normalize(entry.title))
+      track = byMetadata.get(key)
+      // a bare title is only a safe match when the file gave no artist (plain M3U lines often have none)
+      if (!track && !entry.artists.length) track = [...byMetadata.values()].find((candidate) => normalize(candidate.title) === normalize(entry.title))
     }
     if (!track) {
       unmatched++
