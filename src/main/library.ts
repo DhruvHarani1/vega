@@ -5,6 +5,7 @@ import { APP_SCHEME, CH, EV, MEDIA_SCHEME } from '@shared/ipc'
 import type { ScanProgress } from '@shared/library'
 import { LibraryDb, rowToTrack } from './db'
 import { scanFolder } from './scanner'
+import { ownerFolder, relinkError } from './relink'
 import { proxyStream } from './streamProxy'
 import { YtDlp, assetName } from './ytdlp'
 import { YtMusic } from './ytmusic'
@@ -122,13 +123,13 @@ export function initLibrary(): void {
     const path = result.filePaths[0]
     if (result.canceled || !path) return false
     // Only relink inside a folder the user already added: never register (and scan) a new directory as a side effect.
-    const norm = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p)
-    const owner = db
-      .folders()
-      .filter((f) => norm(path).startsWith(norm(f.path.endsWith(sep) ? f.path : f.path + sep)))
-      .sort((a, b) => b.path.length - a.path.length)[0]
+    const owner = ownerFolder(path, db.folders(), process.platform)
     if (!owner) throw new Error('Pick a file inside one of your library folders, or add its folder under Sources first.')
-    db.relinkTrack(String(id), path, Number(owner.id))
+    try {
+      db.relinkTrack(String(id), path, Number(owner.id))
+    } catch (err) {
+      throw relinkError(err)
+    }
     await runScan(Number(owner.id))
     return true
   })
