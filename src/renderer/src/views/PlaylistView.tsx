@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { matchImportedTracks, parsePlaylistFile, safePlaylistFilename, serializePlaylistJson, serializePlaylistM3u8 } from '@shared/playlist-transfer'
+import { Cover } from '@/components/Cover'
 import { Icon } from '@/components/Icon'
 import { TrackList } from '@/components/TrackList'
 import { fmtMinutes } from '@/lib/format'
@@ -67,12 +68,13 @@ export function PlaylistView({ id }: { id: string }) {
 
   return (
     <div className="page-pad">
-      <div className="hero-head">
-        <div className="hero-art">
-          <Icon name="library" size={56} />
+      <div className="hero-head playlist-hero">
+        <div className="playlist-mosaic" aria-label="Playlist artwork">
+          {playlist.tracks.slice(0, 4).map((track) => <Cover key={`${track.ref.source}:${track.ref.id}`} track={track} fill />)}
+          {!playlist.tracks.length && <div className="playlist-mosaic-empty"><Icon name="library" size={52} /></div>}
         </div>
-        <div>
-          <div className="eyebrow">Playlist</div>
+        <div className="playlist-hero-content">
+          <div className="eyebrow">Your collection / Playlist</div>
           {editing ? (
             <input
               className="title-input"
@@ -89,9 +91,7 @@ export function PlaylistView({ id }: { id: string }) {
               {playlist.name}
             </h1>
           )}
-          <div className="muted">
-            {playlist.tracks.length} songs · {fmtMinutes(mins)}
-          </div>
+          <div className="playlist-meta"><span>{playlist.tracks.length} songs</span><span>{fmtMinutes(mins)}</span><span>{playlist.tracks.length ? `Featuring ${playlist.tracks.slice(0, 2).map((track) => track.artists.join(', ')).join(' · ')}` : 'Ready for your next favourite'}</span></div>
           <div className="actions">
             <button className="pill big" disabled={!playlist.tracks.length} onClick={() => playTracks(playlist.tracks)}>
               <Icon name="play" size={16} /> Play
@@ -125,14 +125,14 @@ export function PlaylistView({ id }: { id: string }) {
         </div>
       </div>
       {!playlist.tracks.length && <div className="muted pad">Empty. Use the ⋯ menu on any song to add it here.</div>}
-      <TrackList
+      <section className="playlist-track-section"><div className="playlist-section-heading"><div><p className="eyebrow">Your selection</p><h2>Tracks</h2></div><span className="muted small">{playlist.tracks.length} total</span></div><TrackList
         tracks={playlist.tracks}
         extra={(i) => [
           { label: 'Move up', run: () => moveInPlaylist(id, i, i - 1) },
           { label: 'Move down', run: () => moveInPlaylist(id, i, i + 1) },
           { label: 'Remove from playlist', run: () => removeFromPlaylist(id, i) }
         ]}
-      />
+      /></section>
     </div>
   )
 }

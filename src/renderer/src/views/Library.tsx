@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { Cover } from '@/components/Cover'
 import { Icon } from '@/components/Icon'
 import { TrackList } from '@/components/TrackList'
-import { fmtMinutes } from '@/lib/format'
 import { recentTracks } from '@/lib/recommender'
 import { useLibrary } from '@/store/library'
 import { usePlayer } from '@/store/player'
@@ -18,23 +17,24 @@ export function Library() {
   const playTracks = usePlayer((s) => s.playTracks)
   const go = useUi((s) => s.go)
   const [tab, setTab] = useState<Tab>('liked')
-  const mins = Math.round(liked.reduce((n, t) => n + t.durationMs, 0) / 60_000)
   const history = useMemo(() => recentTracks(events, 100), [events])
+  const collectionTracks = useMemo(() => [...liked, ...playlists.flatMap((p) => p.tracks)].filter((track, index, all) => all.findIndex((item) => item.ref.source === track.ref.source && item.ref.id === track.ref.id) === index).slice(0, 4), [liked, playlists])
 
   return (
     <div className="page-pad">
-      <header className="hero-head">
-        <div className="hero-art liked">
-          <Icon name="heart-fill" size={64} />
+      <header className="hero-head collection-hero">
+        <div className="collection-mosaic" aria-label="Artwork from your collection">
+          {collectionTracks.length ? collectionTracks.map((track) => <Cover key={`${track.ref.source}:${track.ref.id}`} track={track} fill />) : <div className="collection-mosaic-empty"><Icon name="library" size={48} /></div>}
         </div>
         <div className="hero-body">
-          <p className="eyebrow">Your library</p>
+          <p className="eyebrow">Your collection</p>
           <h1 className="display">
-            Liked <em>songs</em>
+            Your <em>library</em>
           </h1>
           <p className="muted">
-            {liked.length} songs · {fmtMinutes(mins)} · {playlists.length + smart.length} playlists
+            {liked.length} liked songs · {playlists.length + smart.length} playlists · {history.length} recent tracks
           </p>
+          <div className="collection-stats" aria-label="Collection statistics"><span><strong>{liked.length}</strong><small>Liked songs</small></span><span><strong>{playlists.length + smart.length}</strong><small>Playlists</small></span><span><strong>{history.length}</strong><small>Recent</small></span></div>
           <div className="actions">
             <button className="pill big" disabled={!liked.length} onClick={() => playTracks(liked)}>
               <Icon name="play" size={16} /> Play
@@ -54,7 +54,7 @@ export function Library() {
         </div>
       </header>
 
-      <div className="chips" role="tablist">
+      <div className="chips collection-tabs" role="tablist" aria-label="Library sections">
         {(['liked', 'playlists', 'history'] as Tab[]).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`chip${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}>
             {t === 'liked' ? 'Liked' : t === 'playlists' ? 'Playlists' : 'History'}

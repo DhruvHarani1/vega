@@ -63,12 +63,12 @@ export function SmartView({ id }: { id: string }) {
 
   return (
     <div className="page-pad">
-      <div className="hero-head">
-        <div className="hero-art smart">
+      <div className="hero-head smart-hero">
+        <div className="hero-art smart smart-hero-art">
           <Icon name="star" size={56} />
         </div>
         <div>
-          <div className="eyebrow">Smart playlist</div>
+          <div className="eyebrow">Your collection / Smart playlist</div>
           <h1>{current.name}</h1>
           <div className="muted">
             {tracks.length} songs · {fmtMinutes(mins)} · updates automatically
@@ -98,7 +98,8 @@ export function SmartView({ id }: { id: string }) {
       </div>
 
       {editing && (
-        <div className="panel form">
+        <div className="panel form smart-rule-editor">
+          <div className="smart-editor-heading"><div><p className="eyebrow">Make it yours</p><h2>Playlist rules</h2><p className="muted small">Choose what belongs here. Your collection updates as you listen.</p></div><span className="smart-rule-count">{draft.conditions.length} {draft.conditions.length === 1 ? 'rule' : 'rules'}</span></div>
           <label>
             Name
             <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={80} />
